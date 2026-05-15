@@ -172,6 +172,35 @@ else:
     print("Loaded translated Bengali prompts from checkpoint.")
 
 # ------------------------------------------------------------------------------
+# STEP 4.5: Semantic Equivalence Validation (LaBSE)
+# ------------------------------------------------------------------------------
+from sentence_transformers import SentenceTransformer, util
+
+def validate_translation_equivalence(eng_prompts, ben_prompts):
+    """Uses LaBSE (Language-agnostic BERT Sentence Embedding) to prove semantic preservation."""
+    print("\nValidating semantic equivalence using LaBSE...")
+    labse_model = SentenceTransformer('sentence-transformers/LaBSE').to(DEVICE)
+
+    eng_embeddings = labse_model.encode(eng_prompts, convert_to_tensor=True)
+    ben_embeddings = labse_model.encode(ben_prompts, convert_to_tensor=True)
+
+    # Calculate cosine similarity between the English and Bengali embedding vectors
+    cosine_scores = util.cos_sim(eng_embeddings, ben_embeddings)
+
+    # We only care about the paired translations (the diagonal of the matrix)
+    paired_scores = [cosine_scores[i][i].item() for i in range(len(eng_prompts))]
+    avg_score = sum(paired_scores) / len(paired_scores)
+
+    print(f"Average Cross-Lingual Semantic Similarity: {avg_score:.4f} (Scores > 0.7 indicate strong equivalence)")
+
+    del labse_model
+    torch.cuda.empty_cache()
+    return avg_score
+
+# Run this once and record the score for the paper
+labse_score = validate_translation_equivalence(english_prompts, bengali_prompts)
+
+# ------------------------------------------------------------------------------
 # STEP 5: Model Inference (Testing the Guardrails with Ablation)
 # ------------------------------------------------------------------------------
 def generate_responses(prompts, model_id, language="English", use_system_prompt=False):
